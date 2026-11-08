@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi ESPHome Switches (esphome linux platform)
+Description=Pi ESPHome Switches (esphome host platform)
 After=network-online.target
 Wants=network-online.target
 
@@ -8,12 +8,12 @@ Type=simple
 User=pi
 Group=pi
 WorkingDirectory=/opt/pi-esphome-switches
-# Run esphome in the foreground; systemd will restart it on failure
-ExecStartPre=/usr/bin/esphome config /opt/pi-esphome-switches/esphome/pi-switches.yaml >/dev/null 2>&1 || true
-ExecStart=/usr/bin/esphome run /opt/pi-esphome-switches/esphome/pi-switches.yaml --no-logs
+# Validate config before starting (output goes to journal)
+ExecStartPre=/usr/bin/esphome config /opt/pi-esphome-switches/esphome/pi-switches.yaml
+# Run esphome host device in the foreground; systemd restarts on failure
+ExecStart=/usr/bin/esphome run /opt/pi-esphome-switches/esphome/pi-switches.yaml
 Restart=always
 RestartSec=5
-# Give actions (reboot/shutdown) time to finish before systemd kills the process
 TimeoutStopSec=30
 
 [Install]
