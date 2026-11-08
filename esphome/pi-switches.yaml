@@ -18,6 +18,9 @@ host:
 api:
   port: 6053
 
+# Logger component (needed for logger.log actions on buttons)
+logger:
+
 # ---------------------------------------------------------------------------
 
 # OTA updates via the ESPHome dashboard / Home Assistant (optional)
