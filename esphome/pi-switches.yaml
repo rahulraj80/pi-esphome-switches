@@ -5,15 +5,16 @@ esphome:
     name: "rahulraj80.pi-esphome-switches"
     version: "1.0.0"
 
+# `host` runs ESPHome natively on this Raspberry Pi (no microcontroller).
 host:
 
 # ---------------------------------------------------------------------------
-# Native API — enabled by default in esphome 2025.x. Home Assistant discovers
-# this device via the ESPHome integration (Settings → Devices & Services →
-# Add Integration → ESPHome) using this Pi's IP address (or mDNS).
+# Native API — enabled by default in esphome 2025.x.
+# Home Assistant discovers this device via Settings → Devices & Services →
+# Add Integration → ESPHome, using this Pi's IP address (or mDNS).
 # ---------------------------------------------------------------------------
 
-# OTA updates via the ESPHome dashboard / HA
+# OTA updates via the ESPHome dashboard / Home Assistant
 ota:
   - platform: esphome
     password: "CHANGE_ME_OTA_PASSWORD"
@@ -47,46 +48,38 @@ switch:
   - platform: template
     name: "VNC Server"
     icon: mdi:remote-desktop
-    id: vnc_switch
     turn_on_action:
       - script.execute: vnc_start
     turn_off_action:
       - script.execute: vnc_stop
-    lambda: |-
-      // Reflect the real service state (polled by the status sensor below)
-      return id(vnc_status).state > 0.5;
 
 # ---------------------------------------------------------------------------
-# Sensors — read-only status telemetry
+# Sensors — read-only telemetry (uptime only; command/cpu_temperature
+# platforms are not available in all esphome versions — uncomment below
+# if your esphome supports them)
 # ---------------------------------------------------------------------------
 sensor:
-  # VNC service status (1 = running, 0 = stopped) — feeds the toggle above
-  - platform: command
-    name: "VNC Service Status"
-    command: "systemctl is-active --quiet vncserver-x11-serviced && echo 1 || echo 0"
-    update_interval: 15s
-    id: vnc_status
-    unit_of_measurement: ""
-    accuracy_decimals: 0
-    internal: true
-
-  # CPU temperature
-  - platform: cpu_temperature
-    name: "CPU Temperature"
-    sensor:
-      name: "CPU Temperature Sensor"
-    update_interval: 30s
-
-  # Uptime
   - platform: uptime
     name: "Pi Uptime"
     id: uptime_sensor
     update_interval: 60s
 
-  # Optional: CPU load average (uncomment to use)
-  # - platform: cpu_load
-  #   name: "CPU Load"
-  #   update_interval: 30s
+#  # VNC service status (requires esphome with sensor.command platform)
+#  - platform: command
+#    name: "VNC Service Status"
+#    command: "systemctl is-active --quiet vncserver-x11-serviced && echo 1 || echo 0"
+#    update_interval: 15s
+#    id: vnc_status
+#    unit_of_measurement: ""
+#    accuracy_decimals: 0
+#    internal: true
+
+#  # CPU temperature (requires esphome with sensor.cpu_temperature platform)
+#  - platform: cpu_temperature
+#    name: "CPU Temperature"
+#    sensor:
+#      name: "CPU Temperature Sensor"
+#    update_interval: 30s
 
 # ---------------------------------------------------------------------------
 # Optional extras — uncomment any you want to enable
@@ -101,16 +94,6 @@ sensor:
 #       - shell_command.execute: "sudo nmcli radio wifi on"
 #     turn_off_action:
 #       - shell_command.execute: "sudo nmcli radio wifi off"
-#     lambda: |-
-#       return id(wifi_status).state > 0.5;
-# sensor:
-#   - platform: command
-#     name: "WiFi Status"
-#     command: "nmcli radio wifi | grep -q enabled && echo 1 || echo 0"
-#     update_interval: 15s
-#     id: wifi_status
-#     internal: true
-#     accuracy_decimals: 0
 
 # Bluetooth toggle
 # switch:
@@ -121,16 +104,6 @@ sensor:
 #       - shell_command.execute: "sudo rfkill unblock bluetooth"
 #     turn_off_action:
 #       - shell_command.execute: "sudo rfkill block bluetooth"
-#     lambda: |-
-#       return id(bt_status).state > 0.5;
-# sensor:
-#   - platform: command
-#     name: "Bluetooth Status"
-#     command: "rfkill list bluetooth | grep -q 'Soft blocked: no' && echo 1 || echo 0"
-#     update_interval: 15s
-#     id: bt_status
-#     internal: true
-#     accuracy_decimals: 0
 
 # ---------------------------------------------------------------------------
 # Scripts — wrap shell commands so buttons/switches can call them
