@@ -45,7 +45,9 @@ systemctl daemon-reload
 systemctl enable --now pi-control-server.service
 
 echo "[5/6] (Best-effort) Installing ESPHome host device..."
-if pip3 install --user esphome 2>/dev/null; then
+# Newer Pi OS (Debian bookworm/trixie+) uses PEP 668 externally managed env;
+# try --break-system-packages if the plain install fails.
+if pip3 install --user esphome 2>/dev/null || pip3 install --user --break-system-packages esphome 2>/dev/null; then
   export PATH="$HOME/.local/bin:$PATH"
   if [ -f "$REPO_FILES/esphome/pi-switches.yaml" ]; then
     sudo install -d -o "$PI_USER" -g "$PI_USER" /opt/pi-esphome-switches/esphome
@@ -55,7 +57,7 @@ if pip3 install --user esphome 2>/dev/null; then
     cp systemd/pi-esphome-switches.service /etc/systemd/system/pi-esphome-switches.service 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable --now pi-esphome-switches.service 2>/dev/null || true
-    echo "    ESPHome host device installed (may need config tweaks for your esphome version)"
+    echo "    ESPHome host device installed"
   fi
 else
   echo "    ESPHome install failed — skipping (control server still works fine)"
