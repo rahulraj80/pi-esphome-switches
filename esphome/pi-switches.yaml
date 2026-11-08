@@ -12,9 +12,11 @@ esphome:
 host:
 
 # ---------------------------------------------------------------------------
-# Native API — enabled by default in esphome 2025.x.
-# Home Assistant discovers this device via Settings → Devices & Services →
-# Add Integration → ESPHome, using this Pi's IP address (or mDNS).
+# Native API — port 6053. Home Assistant's ESPHome integration connects here.
+# ---------------------------------------------------------------------------
+native_api:
+  port: 6053
+
 # ---------------------------------------------------------------------------
 
 # OTA updates via the ESPHome dashboard / Home Assistant (optional)
