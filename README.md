@@ -1,27 +1,52 @@
 # pi-esphome-switches
 
 Expose Raspberry Pi hardware actions (reboot, shutdown, update, start/stop VNC, …)
-as controllable endpoints and surface them in **Home Assistant** at `192.168.3.99`.
+as **ESPHome buttons/switches** in Home Assistant, with the actual actions
+executed by a local authenticated HTTP server.
+
+## Target machines
+
+- **Control Pi** (this repo's deploy target): runs ESPHome host device + pi-control-server
+- **Home Assistant**: `192.168.3.99` (configured later)
 
 ## Architecture
 
-Two components run on the target Pi:
+```
+┌─────────────────┐      native API (6053)      ┌─────────────────────┐
+│  Home Assistant │ ◄─────────────────────────── │  ESPHome host       │
+│     (.99)       │                              │  on Control Pi      │
+└─────────────────┘                              │  (.94 / .99)        │
+                                                 │                     │
+                                                 │   HTTP Basic Auth   │
+                                                 └─────────┬───────────┘
+                                                           │ port 9090
+                                                 ┌─────────▼───────────┐
+                                                 │ pi-control-server   │
+                                                 │ (executes actions)  │
+                                                 └─────────────────────┘
+```
+
+ESPHome is the **connector only** — it exposes buttons/switches to HA. It does
+not execute Pi actions itself (esphome on the `host` platform has no
+`shell_command`). The actual `reboot`/`shutdown`/`vnc` commands run through
+the separate `pi-control-server` HTTP endpoint, which HA calls with auth.
 
 | Component | Role |
 |-----------|------|
-| **pi-control-server** (`server/pi-control-server.py`) | Lightweight stdlib HTTP server exposing REST endpoints for each action. Runs as root. Guaranteed to work. |
-| **ESPHome host device** (`esphome/pi-switches.yaml`, best-effort) | Native esphome `host` platform device for HA discovery + uptime telemetry. Included but esphome's shell-command API varies by version, so the Python server is the reliable control path. |
+| ESPHome host device | Exposes Reboot/Shutdown/Update buttons + VNC switch to HA |
+| pi-control-server | stdlib Python HTTP server on port **9090** with **HTTP Basic Auth**; executes actions via sudo |
 
 ## What you can control
 
-| Action | Endpoint (POST) |
-|--------|-----------------|
-| Reboot Pi | `http://<pi-ip>:8080/action/reboot` |
-| Shutdown Pi | `http://<pi-ip>:8080/action/shutdown` |
-| Update system (`apt update && upgrade -y`) | `http://<pi-ip>:8080/action/update` |
-| Start VNC | `http://<pi-ip>:8080/action/vnc/start` |
-| Stop VNC | `http://<pi-ip>:8080/action/vnc/stop` |
-| VNC status | `GET http://<pi-ip>:8080/action/vnc/status` |
+| Action | HTTP endpoint (POST, Basic Auth) |
+|--------|----------------------------------|
+| Reboot Pi | `http://<pi-ip>:9090/action/reboot` |
+| Shutdown Pi | `http://<pi-ip>:9090/action/shutdown` |
+| Update system | `http://<pi-ip>:9090/action/update` |
+| Start VNC | `http://<pi-ip>:9090/action/vnc/start` |
+| Stop VNC | `http://<pi-ip>:9090/action/vnc/stop` |
+| VNC status | `GET http://<pi-ip>:9090/action/vnc/status` |
+| Health | `GET http://<pi-ip>:9090/health` (no auth) |
 
 ## Quick start on the target Pi
 
@@ -31,43 +56,73 @@ cd ~/scripts/pi-esphome-switches
 sudo bash deploy/install.sh
 ```
 
-The server binds to `127.0.0.1:8080`. Home Assistant (on `192.168.3.99`) calls these endpoints via its **REST Command** integration.
+The server binds to `127.0.0.1:9090`. Home Assistant (on `192.168.3.99`) reaches it over the LAN via the Pi's IP.
 
-## Home Assistant setup (192.168.3.99)
+## Authentication mechanism
 
-Add one **REST Command** per action:
+**HTTP Basic Auth** (RFC 7617), configured via systemd environment variables:
 
-**Settings → Devices & Services → Add Integration → REST Command**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PI_CONTROL_USER` | `piadmin` | Basic auth username |
+| `PI_CONTROL_PASS` | `changeme` | Basic auth password |
+| `PI_CONTROL_AUTH` | `1` | Set to `0` to disable (not recommended) |
+| `PI_CONTROL_PORT` | `9090` | Non-standard HTTP port |
 
-Example for reboot:
-- Name: `reboot_pi`
-- URL: `http://<this-pi-ip>:8080/action/reboot`
-- Method: `post`
+To change credentials:
 
-Repeat for `shutdown_pi`, `update_pi`, `vnc_start`, `vnc_stop`.
+```bash
+sudo nano /etc/systemd/system/pi-control-server.service
+# Edit PI_CONTROL_USER and PI_CONTROL_PASS
+sudo systemctl daemon-reload
+sudo systemctl restart pi-control-server
+```
 
-Then create **helpers** (Settings → Devices & Services → Helpers) or **scripts** that call these rest commands, and expose them as switches/buttons on your HA dashboards.
+**Example direct access with curl:**
 
-### Optional: Long-Lived Access Token
+```bash
+# Health check (no auth)
+curl http://<pi-ip>:9090/health
 
-Only needed if you call HA's REST API from outside HA:
-1. Profile (bottom-left) → **Long-Lived Access Tokens** → **Create Token**
-2. Name it (e.g. `pi-control`), copy it, store it safely.
-3. Use `Authorization: Bearer <token>` header.
+# Action (with Basic Auth)
+curl -u piadmin:changeme -X POST http://<pi-ip>:9090/action/reboot
 
-## Security notes
+# VNC status
+curl -u piadmin:changeme http://<pi-ip>:9090/action/vnc/status
+```
 
-- Actions run as root. The sudoers rule whitelists only the commands in `systemd/pi-esphome-switches.sudoers` — review before installing.
-- The control server listens on `127.0.0.1:8080` (localhost only). HA reaches it over the LAN via the Pi's IP. If you expose the port, restrict it to your LAN subnet.
-- Change the esphome OTA password if you enable the esphome device.
+> **Security note:** Basic Auth sends credentials base64-encoded (not encrypted).
+> Since this is on your LAN (`192.168.3.x`), that's acceptable for local use.
+> If you ever expose port 9090 beyond your LAN, put it behind HTTPS (e.g. via
+> an nginx/stunnel reverse proxy) or restrict it with firewall rules.
+
+## Home Assistant setup (192.168.3.99) — do this after install
+
+1. **Discover the ESPHome device:**
+   Settings → Devices & Services → Add Integration → ESPHome → enter this Pi's IP
+
+2. **Add REST commands** (one per action):
+   Settings → Devices & Services → Add Integration → REST Command
+   - Name: `reboot_pi`
+   - URL: `http://<pi-ip>:9090/action/reboot`
+   - Method: `post`
+   - Authentication: `Basic` → user `piadmin`, pass `changeme`
+   - Repeat for `shutdown_pi`, `update_pi`, `vnc_start`, `vnc_stop`
+
+3. **Create automations** (button press → REST command):
+   Settings → Automations → Add Automation
+   - Trigger: ESPHome button `button.reboot_pi` pressed
+   - Action: Call service `rest_command.reboot_pi`
+   - Repeat for each button/switch
+
+4. **Create helpers / dashboard entities** so the buttons appear as switches on your HA dashboard.
 
 ## Logs & troubleshooting
 
 ```bash
 systemctl status pi-control-server
 journalctl -u pi-control-server -f
-curl -X POST http://127.0.0.1:8080/action/vnc/status
-curl -X POST http://127.0.0.1:8080/action/reboot
+curl -u piadmin:changeme -X POST http://127.0.0.1:9090/action/vnc/status
 ```
 
 ## License

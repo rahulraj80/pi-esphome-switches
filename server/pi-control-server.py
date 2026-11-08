@@ -1,40 +1,52 @@
 #!/usr/bin/env python3
 #
-# pi-control-server.py — lightweight HTTP server that exposes Raspberry Pi
-# hardware actions (reboot, shutdown, update, start/stop VNC) as REST
-# endpoints.
+# pi-control-server.py — lightweight HTTP server exposing Raspberry Pi
+# hardware actions as authenticated REST endpoints.
 #
-# Uses only the Python standard library (http.server) so nothing extra
-# needs to be installed.
+# Uses only the Python standard library (http.server). Nothing extra to
+# install on the Pi.
 #
-# Endpoints (all POST):
+# Endpoints (all require HTTP Basic Auth unless PI_CONTROL_AUTH=0):
 #   POST /action/reboot      -> reboot the Pi
 #   POST /action/shutdown    -> power off the Pi
 #   POST /action/update      -> apt update + upgrade
 #   POST /action/vnc/start   -> start vncserver-x11-serviced
 #   POST /action/vnc/stop    -> stop vncserver-x11-serviced
-#   GET  /action/vnc/status  -> returns "ON" or "OFF"
-#   GET  /health             -> health check
+#   GET  /action/vnc/status  -> returns {"status": "ON"|"OFF"}
+#   GET  /health             -> health check (no auth)
 #
-# Runs as root (via systemd User=root or sudo) so actions work without
-# per-command sudoers entries. Bound to 127.0.0.1:8080 by default —
-# expose via Home Assistant REST commands on the local LAN.
+# Configuration via environment variables:
+#   PI_CONTROL_HOST      bind address (default: 127.0.0.1)
+#   PI_CONTROL_PORT      bind port    (default: 9090  <- non-standard)
+#   PI_CONTROL_USER      basic auth user (default: piadmin)
+#   PI_CONTROL_PASS      basic auth pass (default: changeme   <- CHANGE THIS)
+#   PI_CONTROL_AUTH      set to "0" to disable auth (not recommended)
+#   PI_ACTION_SCRIPT     path to dispatcher (default: /opt/pi-esphome-switches/scripts/pi-actions.sh)
 #
 
+import base64
 import http.server
 import json
 import os
 import subprocess
-import sys
 from threading import Thread
 
 HOST = os.environ.get("PI_CONTROL_HOST", "127.0.0.1")
-PORT = int(os.environ.get("PI_CONTROL_PORT", "8080"))
-ACTION_SCRIPT = "/opt/pi-esphome-switches/scripts/pi-actions.sh"
+PORT = int(os.environ.get("PI_CONTROL_PORT", "9090"))
+USER = os.environ.get("PI_CONTROL_USER", "piadmin")
+PASS = os.environ.get("PI_CONTROL_PASS", "changeme")
+ENABLE_AUTH = os.environ.get("PI_CONTROL_AUTH", "1") != "0"
+ACTION_SCRIPT = os.environ.get(
+    "PI_ACTION_SCRIPT",
+    "/opt/pi-esphome-switches/scripts/pi-actions.sh",
+)
+
+# Pre-compute the base64 token for Basic Auth comparison
+_AUTH_TOKEN = base64.b64encode(f"{USER}:{PASS}".encode()).decode()
 
 
 def run(action):
-    """Run an action script. Returns (returncode, output)."""
+    """Run an action via sudo. Returns (returncode, output)."""
     try:
         result = subprocess.run(
             ["sudo", ACTION_SCRIPT, action],
@@ -47,6 +59,40 @@ def run(action):
         return 124, "timeout"
     except Exception as exc:  # pylint: disable=broad-except
         return 1, str(exc)
+
+
+def _check_auth(handler):
+    """Return True if authenticated, False if a 401 was already sent."""
+    if not ENABLE_AUTH:
+        return True
+
+    auth_header = handler.headers.get("Authorization", "")
+    if not auth_header.startswith("Basic "):
+        handler.send_response(401)
+        handler.send_header("WWW-Authenticate", 'Basic realm="Pi Control"')
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+        return False
+
+    provided = auth_header[6:].strip()
+    if not _constant_time_compare(provided, _AUTH_TOKEN):
+        handler.send_response(401)
+        handler.send_header("WWW-Authenticate", 'Basic realm="Pi Control"')
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+        return False
+
+    return True
+
+
+def _constant_time_compare(a, b):
+    """Simple constant-time compare to avoid timing attacks."""
+    if len(a) != len(b):
+        return False
+    result = 0
+    for x, y in zip(a, b):
+        result |= x != y if isinstance(x, int) else ord(x) != ord(y)
+    return result == 0
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -67,11 +113,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         if self.path == "/health":
             self._send(200, {"status": "ok"})
-        elif self.path == "/action/vnc/status":
+            return
+
+        if self.path == "/action/vnc/status":
+            if not _check_auth(self):
+                return
             rc, out = run("vnc-status")
             self._send(200, {"status": out})
-        else:
-            self._send(404, {"error": "not found"})
+            return
+
+        self._send(404, {"error": "not found"})
 
     def do_POST(self):  # noqa: N802
         routes = {
@@ -86,6 +137,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
             return
 
+        if not _check_auth(self):
+            return
+
         rc, out = run(action)
         if rc == 0:
             self._send(200, {"action": action, "status": "ok", "output": out})
@@ -95,7 +149,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     server = http.server.ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"pi-control-server listening on {HOST}:{PORT}", flush=True)
+    print(
+        f"pi-control-server listening on {HOST}:{PORT} "
+        f"(auth={'on' if ENABLE_AUTH else 'off'})",
+        flush=True,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

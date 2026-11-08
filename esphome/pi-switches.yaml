@@ -6,6 +6,9 @@ esphome:
     version: "1.0.0"
 
 # `host` runs ESPHome natively on this Raspberry Pi (no microcontroller).
+# ESPHome is the CONNECTOR only: it exposes buttons/switches to Home Assistant
+# via the native API. The actual Pi actions (reboot/shutdown/vnc) are executed
+# by the separate pi-control-server (HTTP Basic Auth on port 9090).
 host:
 
 # ---------------------------------------------------------------------------
@@ -20,43 +23,38 @@ ota:
     password: "CHANGE_ME_OTA_PASSWORD"
 
 # ---------------------------------------------------------------------------
-# Momentary buttons (press to trigger, auto-reset)
+# Momentary buttons — exposed to HA as button entities.
+# Pressing one in HA sends a press event; HA automation (set up later) should
+# catch that event and call the pi-control-server HTTP endpoint with auth.
 # ---------------------------------------------------------------------------
 button:
   - platform: template
     name: "Reboot Pi"
     icon: mdi:restart
-    on_press:
-      - script.execute: reboot_action
+    device_class: restart
 
   - platform: template
     name: "Shutdown Pi"
     icon: mdi:power
-    on_press:
-      - script.execute: shutdown_action
+    device_class: shutdown
 
   - platform: template
     name: "Update System"
     icon: mdi:package-up
-    on_press:
-      - script.execute: update_action
+    device_class: update
 
 # ---------------------------------------------------------------------------
-# Toggle switches (persistent on/off)
+# Toggle switch — exposed to HA as a switch entity.
 # ---------------------------------------------------------------------------
 switch:
   - platform: template
     name: "VNC Server"
     icon: mdi:remote-desktop
-    turn_on_action:
-      - script.execute: vnc_start
-    turn_off_action:
-      - script.execute: vnc_stop
+    device_class: switch
 
 # ---------------------------------------------------------------------------
 # Sensors — read-only telemetry (uptime only; command/cpu_temperature
-# platforms are not available in all esphome versions — uncomment below
-# if your esphome supports them)
+# platforms are not available in all esphome versions)
 # ---------------------------------------------------------------------------
 sensor:
   - platform: uptime
@@ -64,7 +62,7 @@ sensor:
     id: uptime_sensor
     update_interval: 60s
 
-#  # VNC service status (requires esphome with sensor.command platform)
+#  # Uncomment if your esphome version supports sensor.command
 #  - platform: command
 #    name: "VNC Service Status"
 #    command: "systemctl is-active --quiet vncserver-x11-serviced && echo 1 || echo 0"
@@ -73,13 +71,6 @@ sensor:
 #    unit_of_measurement: ""
 #    accuracy_decimals: 0
 #    internal: true
-
-#  # CPU temperature (requires esphome with sensor.cpu_temperature platform)
-#  - platform: cpu_temperature
-#    name: "CPU Temperature"
-#    sensor:
-#      name: "CPU Temperature Sensor"
-#    update_interval: 30s
 
 # ---------------------------------------------------------------------------
 # Optional extras — uncomment any you want to enable
@@ -90,54 +81,17 @@ sensor:
 #   - platform: template
 #     name: "WiFi"
 #     icon: mdi:wifi
-#     turn_on_action:
-#       - shell_command.execute: "sudo nmcli radio wifi on"
-#     turn_off_action:
-#       - shell_command.execute: "sudo nmcli radio wifi off"
 
 # Bluetooth toggle
 # switch:
 #   - platform: template
 #     name: "Bluetooth"
 #     icon: mdi:bluetooth
-#     turn_on_action:
-#       - shell_command.execute: "sudo rfkill unblock bluetooth"
-#     turn_off_action:
-#       - shell_command.execute: "sudo rfkill block bluetooth"
-
-# ---------------------------------------------------------------------------
-# Scripts — wrap shell commands so buttons/switches can call them
-# ---------------------------------------------------------------------------
-script:
-  - id: reboot_action
-    mode: queued
-    then:
-      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh reboot"
-
-  - id: shutdown_action
-    mode: queued
-    then:
-      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh shutdown"
-
-  - id: update_action
-    mode: queued
-    then:
-      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh update"
-
-  - id: vnc_start
-    mode: queued
-    then:
-      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh vnc-start"
-
-  - id: vnc_stop
-    mode: queued
-    then:
-      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh vnc-stop"
 
 # ---------------------------------------------------------------------------
 # Status LED (onboard) — optional, shows ESPHome is running
 # ---------------------------------------------------------------------------
 # status_led:
 #   pin:
-#     number: GPIO16  # change to your board's LED pin
+#     number: GPIO16
 #     inverted: true

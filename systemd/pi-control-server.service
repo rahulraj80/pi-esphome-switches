@@ -9,6 +9,14 @@ User=root
 Group=root
 WorkingDirectory=/opt/pi-esphome-switches
 # Runs as root so sudo is not needed for individual commands
+# Non-standard port: 9090 (change via PI_CONTROL_PORT if needed)
+# Credentials: PI_CONTROL_USER / PI_CONTROL_PASS (set below, CHANGE THEM)
+Environment="PI_CONTROL_HOST=127.0.0.1"
+Environment="PI_CONTROL_PORT=9090"
+Environment="PI_CONTROL_USER=piadmin"
+Environment="PI_CONTROL_PASS=changeme"
+Environment="PI_CONTROL_AUTH=1"
+Environment="PI_ACTION_SCRIPT=/opt/pi-esphome-switches/scripts/pi-actions.sh"
 ExecStart=/usr/bin/python3 /opt/pi-esphome-switches/server/pi-control-server.py
 Restart=always
 RestartSec=5

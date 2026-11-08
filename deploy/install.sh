@@ -11,7 +11,7 @@
 #   3. Sets up passwordless sudo for the whitelisted actions
 #   4. Installs & enables the pi-control-server systemd service (HTTP endpoints)
 #   5. (Best-effort) Installs ESPHome host device for HA discovery
-#   6. Prints Home Assistant REST command setup steps
+#   6. Prints Home Assistant setup steps
 #
 
 set -uo pipefail
@@ -51,7 +51,6 @@ if pip3 install --user esphome 2>/dev/null; then
     sudo install -d -o "$PI_USER" -g "$PI_USER" /opt/pi-esphome-switches/esphome
     sudo cp "$REPO_FILES/esphome/pi-switches.yaml" /opt/pi-esphome-switches/esphome/
     sudo chown -R "$PI_USER:$PI_USER" /opt/pi-esphome-switches/esphome
-    # Symlink esphome into /usr/bin so systemd can find it
     sudo ln -sf ~/.local/bin/esphome /usr/bin/esphome 2>/dev/null || true
     cp systemd/pi-esphome-switches.service /etc/systemd/system/pi-esphome-switches.service 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
@@ -66,25 +65,32 @@ echo "[6/6] Done."
 echo
 echo "============================================================"
 echo "  Pi Control Server is running on this Pi."
-echo "  Endpoints (POST):"
-echo "    http://<this-pi-ip>:8080/action/reboot"
-echo "    http://<this-pi-ip>:8080/action/shutdown"
-echo "    http://<this-pi-ip>:8080/action/update"
-echo "    http://<this-pi-ip>:8080/action/vnc/start"
-echo "    http://<this-pi-ip>:8080/action/vnc/stop"
-echo "  Status (GET):"
-echo "    http://<this-pi-ip>:8080/action/vnc/status"
+echo "  Endpoints (require HTTP Basic Auth, user: piadmin / pass: changeme):"
+echo "    POST http://<this-pi-ip>:9090/action/reboot"
+echo "    POST http://<this-pi-ip>:9090/action/shutdown"
+echo "    POST http://<this-pi-ip>:9090/action/update"
+echo "    POST http://<this-pi-ip>:9090/action/vnc/start"
+echo "    POST http://<this-pi-ip>:9090/action/vnc/stop"
+echo "    GET  http://<this-pi-ip>:9090/action/vnc/status"
+echo "    GET  http://<this-pi-ip>:9090/health (no auth)"
+echo
+echo "  Example curl:"
+echo "    curl -u piadmin:changeme -X POST http://<this-pi-ip>:9090/action/reboot"
+echo
 echo "  Check status:   systemctl status pi-control-server"
 echo "  View logs:      journalctl -u pi-control-server -f"
 echo
-echo "  Next — add to Home Assistant (192.168.3.99):"
-echo "    Settings → Devices & Services → Helpers → create helpers, OR"
-echo "    Settings → Devices & Services → Add Integration → REST Command"
-echo "    Add one REST command per action, e.g.:"
-echo "      name: Reboot Pi"
-echo "      url: http://<this-pi-ip>:8080/action/reboot"
-echo "      method: post"
-echo "    Then create switch/button helpers in HA that call these commands."
+echo "  CHANGE THE DEFAULT CREDENTIALS:"
+echo "    Edit /etc/systemd/system/pi-control-server.service"
+echo "    PI_CONTROL_USER=... PI_CONTROL_PASS=..."
+echo "    sudo systemctl daemon-reload && sudo systemctl restart pi-control-server"
+echo
+echo "  Next — add ESPHome to Home Assistant (192.168.3.99):"
+echo "    Settings → Devices & Services → Add Integration → ESPHome"
+echo "    Enter this Pi's IP (or let mDNS discover it)"
+echo "    Then create HA automations: when an ESPHome button is pressed,"
+echo "    call REST command POST http://<this-pi-ip>:9090/action/<action>"
+echo "    with the same Basic Auth credentials."
 echo
 echo "  Optional — create an HA Long-Lived Access Token:"
 echo "    Profile (bottom-left) → Long-Lived Access Tokens → Create Token"
