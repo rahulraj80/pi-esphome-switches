@@ -39,12 +39,14 @@ button:
     name: "Reboot Pi"
     icon: mdi:restart
     device_class: restart
+    unique_id: pi_switches_reboot_pi
     on_press:
       - logger.log: "Reboot Pi button pressed"
 
   - platform: template
     name: "Shutdown Pi"
     icon: mdi:power
+    unique_id: pi_switches_shutdown_pi
     on_press:
       - logger.log: "Shutdown Pi button pressed"
 
@@ -52,6 +54,7 @@ button:
     name: "Update System"
     icon: mdi:package-up
     device_class: update
+    unique_id: pi_switches_update_pi
     on_press:
       - logger.log: "Update System button pressed"
 
