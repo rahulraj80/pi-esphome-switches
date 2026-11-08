@@ -35,9 +35,33 @@ logger:
 # generate duplicate IDs). See automations.yaml for wiring to REST commands.
 # ---------------------------------------------------------------------------
 
-# Toggle switch — exposed to HA as a switch entity.
+# Controls — all exposed as ESPHome switches so they appear on the device
+# page in Home Assistant under "Controls". ESPHome (host platform) cannot run
+# shell commands itself, so each switch is driven by an HA automation that
+# calls the pi-control-server (HTTP Basic Auth on :9090).
+#
+# Reboot / Shutdown / Update are momentary: the automation turns the switch
+# back off after firing the action. VNC is a genuine on/off toggle.
 # ---------------------------------------------------------------------------
 switch:
+  - platform: template
+    name: "Reboot Pi"
+    icon: mdi:restart
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: template
+    name: "Shutdown Pi"
+    icon: mdi:power
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: template
+    name: "Update System"
+    icon: mdi:package-up
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+
   - platform: template
     name: "VNC Server"
     icon: mdi:remote-desktop
