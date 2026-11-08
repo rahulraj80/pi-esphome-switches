@@ -5,11 +5,7 @@ esphome:
     name: "rahulraj80.pi-esphome-switches"
     version: "1.0.0"
 
-host:
-
-# Declaring the shell_command component registers the shell_command.execute
-# action used by the scripts below (required on esphome < 2024.12).
-shell_command:
+linux:
 
 # ---------------------------------------------------------------------------
 # Native API — this is how Home Assistant discovers & talks to this device.
