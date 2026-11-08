@@ -56,7 +56,7 @@ cd ~/scripts/pi-esphome-switches
 sudo bash deploy/install.sh
 ```
 
-The server binds to `127.0.0.1:9090`. Home Assistant (on `192.168.3.99`) reaches it over the LAN via the Pi's IP.
+The server binds to `0.0.0.0:9090` (all interfaces). Home Assistant (on `192.168.3.99`) reaches it via the Pi's LAN IP.
 
 ## Authentication mechanism
 
@@ -122,7 +122,7 @@ curl -u piadmin:changeme http://<pi-ip>:9090/action/vnc/status
 ```bash
 systemctl status pi-control-server
 journalctl -u pi-control-server -f
-curl -u piadmin:changeme -X POST http://127.0.0.1:9090/action/vnc/status
+curl -u piadmin:changeme -X POST http://<pi-ip>:9090/action/vnc/status
 ```
 
 ## License
