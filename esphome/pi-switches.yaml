@@ -12,9 +12,10 @@ esphome:
 host:
 
 # ---------------------------------------------------------------------------
-# Native API — port 6053. Home Assistant's ESPHome integration connects here.
+# ESPHome API — port 6053. Home Assistant's ESPHome integration connects here.
+# In esphome 2026.x this is the `api` component (not `native_api`).
 # ---------------------------------------------------------------------------
-native_api:
+api:
   port: 6053
 
 # ---------------------------------------------------------------------------
