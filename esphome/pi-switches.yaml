@@ -36,7 +36,6 @@ button:
   - platform: template
     name: "Shutdown Pi"
     icon: mdi:power
-    device_class: shutdown
 
   - platform: template
     name: "Update System"
