@@ -17,10 +17,11 @@ host:
 # Add Integration → ESPHome, using this Pi's IP address (or mDNS).
 # ---------------------------------------------------------------------------
 
-# OTA updates via the ESPHome dashboard / Home Assistant
-ota:
-  - platform: esphome
-    password: "CHANGE_ME_OTA_PASSWORD"
+# OTA updates via the ESPHome dashboard / Home Assistant (optional)
+# ota:
+#   - platform: esphome
+#     port: 80
+#     password: "CHANGE_ME_OTA_PASSWORD"
 
 # ---------------------------------------------------------------------------
 # Momentary buttons — exposed to HA as button entities.
