@@ -7,6 +7,10 @@ esphome:
 
 host:
 
+# Declaring the shell_command component registers the shell_command.execute
+# action used by the scripts below (required on esphome < 2024.12).
+shell_command:
+
 # ---------------------------------------------------------------------------
 # Native API — this is how Home Assistant discovers & talks to this device.
 # In Home Assistant: Settings → Devices & Services → Add Integration → ESPHome
