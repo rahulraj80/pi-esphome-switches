@@ -36,15 +36,21 @@ button:
     name: "Reboot Pi"
     icon: mdi:restart
     device_class: restart
+    on_press:
+      - logger.log: "Reboot Pi button pressed"
 
   - platform: template
     name: "Shutdown Pi"
     icon: mdi:power
+    on_press:
+      - logger.log: "Shutdown Pi button pressed"
 
   - platform: template
     name: "Update System"
     icon: mdi:package-up
     device_class: update
+    on_press:
+      - logger.log: "Update System button pressed"
 
 # ---------------------------------------------------------------------------
 # Toggle switch — exposed to HA as a switch entity.
