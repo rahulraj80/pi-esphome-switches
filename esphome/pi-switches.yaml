@@ -30,35 +30,11 @@ logger:
 #     password: "CHANGE_ME_OTA_PASSWORD"
 
 # ---------------------------------------------------------------------------
-# Momentary buttons — exposed to HA as button entities.
-# Pressing one in HA sends a press event; HA automation (set up later) should
-# catch that event and call the pi-control-server HTTP endpoint with auth.
+# Momentary buttons are created in Home Assistant as input_button helpers
+# (not via ESPHome, because ESPHome template buttons on the host platform
+# generate duplicate IDs). See automations.yaml for wiring to REST commands.
 # ---------------------------------------------------------------------------
-button:
-  - platform: template
-    name: "Reboot Pi"
-    icon: mdi:restart
-    device_class: restart
-    unique_id: pi_switches_reboot_pi
-    on_press:
-      - logger.log: "Reboot Pi button pressed"
 
-  - platform: template
-    name: "Shutdown Pi"
-    icon: mdi:power
-    unique_id: pi_switches_shutdown_pi
-    on_press:
-      - logger.log: "Shutdown Pi button pressed"
-
-  - platform: template
-    name: "Update System"
-    icon: mdi:package-up
-    device_class: update
-    unique_id: pi_switches_update_pi
-    on_press:
-      - logger.log: "Update System button pressed"
-
-# ---------------------------------------------------------------------------
 # Toggle switch — exposed to HA as a switch entity.
 # ---------------------------------------------------------------------------
 switch:
