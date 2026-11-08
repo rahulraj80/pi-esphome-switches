@@ -1,117 +1,74 @@
 # pi-esphome-switches
 
 Expose Raspberry Pi hardware actions (reboot, shutdown, update, start/stop VNC, …)
-as **ESPHome switches/buttons** and surface them in **Home Assistant** via the
-ESPHome native API.
-
-Target HA server: `192.168.3.99`
-
-## What this gives you
-
-| Entity | Type | Action |
-|--------|------|--------|
-| Reboot Pi | Button (momentary) | `reboot` |
-| Shutdown Pi | Button (momentary) | `poweroff` |
-| Update System | Button (momentary) | `apt update && apt upgrade -y` |
-| VNC Server | Switch (toggle) | `systemctl start/stop vncserver-x11-serviced` |
-| CPU Temperature | Sensor | reads thermal zone |
-| Pi Uptime | Sensor | system uptime |
-
-Optional (commented in the YAML): WiFi toggle, Bluetooth toggle.
+as controllable endpoints and surface them in **Home Assistant** at `192.168.3.99`.
 
 ## Architecture
 
-- **ESPHome (linux platform)** runs natively on the Pi (no microcontroller needed).
-- Buttons/switches run shell commands via `shell_command` → `scripts/pi-actions.sh` → `sudo`.
-- A `systemd` service keeps ESPHome running and restarts it on failure.
-- Home Assistant discovers the device through the **ESPHome integration** (native API).
+Two components run on the target Pi:
 
-## Quick start
+| Component | Role |
+|-----------|------|
+| **pi-control-server** (`server/pi-control-server.py`) | Lightweight stdlib HTTP server exposing REST endpoints for each action. Runs as root. Guaranteed to work. |
+| **ESPHome host device** (`esphome/pi-switches.yaml`, best-effort) | Native esphome `host` platform device for HA discovery + uptime telemetry. Included but esphome's shell-command API varies by version, so the Python server is the reliable control path. |
 
-### 1. On the target Pi (the one to control)
+## What you can control
+
+| Action | Endpoint (POST) |
+|--------|-----------------|
+| Reboot Pi | `http://<pi-ip>:8080/action/reboot` |
+| Shutdown Pi | `http://<pi-ip>:8080/action/shutdown` |
+| Update system (`apt update && upgrade -y`) | `http://<pi-ip>:8080/action/update` |
+| Start VNC | `http://<pi-ip>:8080/action/vnc/start` |
+| Stop VNC | `http://<pi-ip>:8080/action/vnc/stop` |
+| VNC status | `GET http://<pi-ip>:8080/action/vnc/status` |
+
+## Quick start on the target Pi
 
 ```bash
-git clone https://github.com/rahulraj80/pi-esphome-switches.git
-cd pi-esphome-switches
+git clone https://github.com/rahulraj80/pi-esphome-switches.git ~/scripts/pi-esphome-switches
+cd ~/scripts/pi-esphome-switches
 sudo bash deploy/install.sh
 ```
 
-The installer:
-- installs ESPHome,
-- copies files to `/opt/pi-esphome-switches`,
-- sets up passwordless `sudo` for the whitelisted commands,
-- installs and starts the `pi-esphome-switches` systemd service.
+The server binds to `127.0.0.1:8080`. Home Assistant (on `192.168.3.99`) calls these endpoints via its **REST Command** integration.
 
-### 2. In Home Assistant (192.168.3.99)
+## Home Assistant setup (192.168.3.99)
 
-1. **Settings → Devices & Services → Add Integration → ESPHome**
-2. Enter this Pi's IP address (or wait for mDNS discovery).
-3. Submit. The buttons, switches, and sensors appear as entities.
+Add one **REST Command** per action:
 
-> No long-lived access token is required for the ESPHome integration itself — it pairs over the native API. A token is only needed if you call HA's REST API from outside.
+**Settings → Devices & Services → Add Integration → REST Command**
 
-### 3. (Optional) Create an HA Long-Lived Access Token
+Example for reboot:
+- Name: `reboot_pi`
+- URL: `http://<this-pi-ip>:8080/action/reboot`
+- Method: `post`
 
-If you later want to call Home Assistant's REST API:
+Repeat for `shutdown_pi`, `update_pi`, `vnc_start`, `vnc_stop`.
 
-1. In HA, click your **Profile** (bottom-left).
-2. Scroll to **Long-Lived Access Tokens** → **Create Token**.
-3. Give it a name (e.g. `pi-esphome-switches`), copy the token, and store it safely.
-4. Use it in the `Authorization: Bearer <token>` header.
+Then create **helpers** (Settings → Devices & Services → Helpers) or **scripts** that call these rest commands, and expose them as switches/buttons on your HA dashboards.
 
-## Manual deployment (without the installer)
+### Optional: Long-Lived Access Token
 
-```bash
-# 1. Install esphome
-pip3 install --user esphome
-export PATH="$HOME/.local/bin:$PATH"
+Only needed if you call HA's REST API from outside HA:
+1. Profile (bottom-left) → **Long-Lived Access Tokens** → **Create Token**
+2. Name it (e.g. `pi-control`), copy it, store it safely.
+3. Use `Authorization: Bearer <token>` header.
 
-# 2. Copy files
-sudo install -d -o $USER -g $USER /opt/pi-esphome-switches/{esphome,scripts,systemd}
-cp esphome/pi-switches.yaml /opt/pi-esphome-switches/esphome/
-cp scripts/pi-actions.sh /opt/pi-esphome-switches/scripts/
-chmod +x /opt/pi-esphome-switches/scripts/pi-actions.sh
+## Security notes
 
-# 3. Passwordless sudo
-sudo install -m 0440 systemd/pi-esphome-switches.sudoers /etc/sudoers.d/pi-esphome-switches
-sudo visudo -c
-
-# 4. systemd
-sudo cp systemd/pi-esphome-switches.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now pi-esphome-switches
-```
-
-## Configuration
-
-Edit `esphome/pi-switches.yaml` before deploying:
-
-- `ota.password` — set a strong OTA password.
-- Uncomment the **WiFi / Bluetooth** sections in the YAML if you want those toggles.
-- Change `vncserver-x11-serviced` to your VNC service name if different (e.g. `tightvncserver`).
+- Actions run as root. The sudoers rule whitelists only the commands in `systemd/pi-esphome-switches.sudoers` — review before installing.
+- The control server listens on `127.0.0.1:8080` (localhost only). HA reaches it over the LAN via the Pi's IP. If you expose the port, restrict it to your LAN subnet.
+- Change the esphome OTA password if you enable the esphome device.
 
 ## Logs & troubleshooting
 
 ```bash
-# Service status
-systemctl status pi-esphome-switches
-
-# Live logs
-journalctl -u pi-esphome-switches -f
-
-# ESPHome logs
-esphome logs /opt/pi-esphome-switches/esphome/pi-switches.yaml
-
-# Test an action directly
-sudo /opt/pi-esphome-switches/scripts/pi-actions.sh reboot
-sudo /opt/pi-esphome-switches/scripts/pi-actions.sh vnc-status
+systemctl status pi-control-server
+journalctl -u pi-control-server -f
+curl -X POST http://127.0.0.1:8080/action/vnc/status
+curl -X POST http://127.0.0.1:8080/action/reboot
 ```
-
-## Security notes
-
-- Reboot/shutdown/update run as root. The sudoers rule whitelists only the commands in `systemd/pi-esphome-switches.sudoers` — review it before installing.
-- The device listens on the ESPHome native API port (6053). Keep it on a trusted LAN.
-- Change the OTA password and consider binding `native_api` to a specific interface if needed.
 
 ## License
 

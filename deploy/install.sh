@@ -1,63 +1,91 @@
 #!/usr/bin/env bash
 #
-# install.sh — one-liner installer for the Pi ESPHome Switches device.
+# install.sh — one-line installer for the Pi control facility.
 # Run this on the target Raspberry Pi (the one you want to control).
 #
 #   curl -fsSL https://raw.githubusercontent.com/rahulraj80/pi-esphome-switches/main/deploy/install.sh | sudo bash
 #
 # What it does:
-#   1. Installs ESPHome (pipx) if missing
+#   1. Installs python3 (already present on most Pi OS images)
 #   2. Copies files to /opt/pi-esphome-switches
-#   3. Sets up passwordless sudo for the actions
-#   4. Installs & enables the systemd service
-#   5. Prints Home Assistant setup steps
+#   3. Sets up passwordless sudo for the whitelisted actions
+#   4. Installs & enables the pi-control-server systemd service (HTTP endpoints)
+#   5. (Best-effort) Installs ESPHome host device for HA discovery
+#   6. Prints Home Assistant REST command setup steps
 #
 
-set -euo pipefail
+set -uo pipefail
 
 REPO_FILES="/opt/pi-esphome-switches"
 PI_USER="${SUDO_USER:-pi}"
 
-echo "[1/6] Ensuring prerequisites (python3, pip, git)..."
+echo "[1/6] Ensuring prerequisites (python3)..."
 apt-get update -y
-apt-get install -y python3 python3-pip python3-venv git
+apt-get install -y python3
 
-echo "[2/6] Installing ESPHome (pipx)..."
-if ! command -v esphome >/dev/null 2>&1; then
-  pip3 install --user esphome
-  export PATH="$HOME/.local/bin:$PATH"
-fi
-ESPHOME_BIN="$(command -v esphome || echo "$HOME/.local/bin/esphome")"
-
-echo "[3/6] Installing files to $REPO_FILES..."
-install -d -o "$PI_USER" -g "$PI_USER" "$REPO_FILES/esphome" "$REPO_FILES/scripts" "$REPO_FILES/systemd"
-cp esphome/pi-switches.yaml "$REPO_FILES/esphome/"
+echo "[2/6] Installing files to $REPO_FILES..."
+install -d -o "$PI_USER" -g "$PI_USER" \
+  "$REPO_FILES/server" "$REPO_FILES/scripts" "$REPO_FILES/systemd" \
+  "$REPO_FILES/esphome"
+cp server/pi-control-server.py "$REPO_FILES/server/"
 cp scripts/pi-actions.sh "$REPO_FILES/scripts/"
-chmod +x "$REPO_FILES/scripts/pi-actions.sh"
+chmod +x "$REPO_FILES/server/pi-control-server.py" "$REPO_FILES/scripts/pi-actions.sh"
+if [ -f esphome/pi-switches.yaml ]; then
+  cp esphome/pi-switches.yaml "$REPO_FILES/esphome/"
+fi
 chown -R "$PI_USER:$PI_USER" "$REPO_FILES"
 
-echo "[4/6] Setting up passwordless sudo..."
+echo "[3/6] Setting up passwordless sudo..."
 install -m 0440 systemd/pi-esphome-switches.sudoers /etc/sudoers.d/pi-esphome-switches
 visudo -c
 
-echo "[5/6] Installing systemd service..."
-cp systemd/pi-esphome-switches.service /etc/systemd/system/pi-esphome-switches.service
+echo "[4/6] Installing pi-control-server systemd service..."
+cp systemd/pi-control-server.service /etc/systemd/system/pi-control-server.service
 systemctl daemon-reload
-systemctl enable --now pi-esphome-switches.service
+systemctl enable --now pi-control-server.service
+
+echo "[5/6] (Best-effort) Installing ESPHome host device..."
+if pip3 install --user esphome 2>/dev/null; then
+  export PATH="$HOME/.local/bin:$PATH"
+  if [ -f "$REPO_FILES/esphome/pi-switches.yaml" ]; then
+    sudo install -d -o "$PI_USER" -g "$PI_USER" /opt/pi-esphome-switches/esphome
+    sudo cp "$REPO_FILES/esphome/pi-switches.yaml" /opt/pi-esphome-switches/esphome/
+    sudo chown -R "$PI_USER:$PI_USER" /opt/pi-esphome-switches/esphome
+    # Symlink esphome into /usr/bin so systemd can find it
+    sudo ln -sf ~/.local/bin/esphome /usr/bin/esphome 2>/dev/null || true
+    cp systemd/pi-esphome-switches.service /etc/systemd/system/pi-esphome-switches.service 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now pi-esphome-switches.service 2>/dev/null || true
+    echo "    ESPHome host device installed (may need config tweaks for your esphome version)"
+  fi
+else
+  echo "    ESPHome install failed — skipping (control server still works fine)"
+fi
 
 echo "[6/6] Done."
 echo
 echo "============================================================"
-echo "  ESPHome device 'pi-switches' is now running on this Pi."
-echo "  Check status:   systemctl status pi-esphome-switches"
-echo "  View logs:      journalctl -u pi-esphome-switches -f"
+echo "  Pi Control Server is running on this Pi."
+echo "  Endpoints (POST):"
+echo "    http://<this-pi-ip>:8080/action/reboot"
+echo "    http://<this-pi-ip>:8080/action/shutdown"
+echo "    http://<this-pi-ip>:8080/action/update"
+echo "    http://<this-pi-ip>:8080/action/vnc/start"
+echo "    http://<this-pi-ip>:8080/action/vnc/stop"
+echo "  Status (GET):"
+echo "    http://<this-pi-ip>:8080/action/vnc/status"
+echo "  Check status:   systemctl status pi-control-server"
+echo "  View logs:      journalctl -u pi-control-server -f"
 echo
-echo "  Next — add it to Home Assistant (192.168.3.99):"
-echo "    1. Settings → Devices & Services → Add Integration → ESPHome"
-echo "    2. Enter this Pi's IP address (or let mDNS discover it)"
-echo "    3. Submit — the buttons & switches will appear"
+echo "  Next — add to Home Assistant (192.168.3.99):"
+echo "    Settings → Devices & Services → Helpers → create helpers, OR"
+echo "    Settings → Devices & Services → Add Integration → REST Command"
+echo "    Add one REST command per action, e.g.:"
+echo "      name: Reboot Pi"
+echo "      url: http://<this-pi-ip>:8080/action/reboot"
+echo "      method: post"
+echo "    Then create switch/button helpers in HA that call these commands."
 echo
-echo "  Optional — create an HA Long-Lived Access Token (for API access):"
+echo "  Optional — create an HA Long-Lived Access Token:"
 echo "    Profile (bottom-left) → Long-Lived Access Tokens → Create Token"
-echo "    Copy the token; store it safely (HA will not show it again)"
 echo "============================================================"

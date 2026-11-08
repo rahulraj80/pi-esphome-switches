@@ -1,7 +1,7 @@
 # /etc/sudoers.d/pi-esphome-switches
 #
-# Allow the pi user to run the pi-actions dispatcher (and the actions it
-# calls) without a password. Installed with:
+# Allow the pi user to run the pi-actions dispatcher (used by the control
+# server) without a password. Installed with:
 #   sudo install -m 0440 systemd/pi-esphome-switches.sudoers /etc/sudoers.d/pi-esphome-switches
 #   visudo -c  # validate
 #

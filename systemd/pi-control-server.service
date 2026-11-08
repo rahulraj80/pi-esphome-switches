@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi Control Server (HTTP action endpoints for Home Assistant)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/pi-esphome-switches
+# Runs as root so sudo is not needed for individual commands
+ExecStart=/usr/bin/python3 /opt/pi-esphome-switches/server/pi-control-server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
