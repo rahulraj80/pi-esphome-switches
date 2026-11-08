@@ -49,7 +49,7 @@ switch:
   - platform: template
     name: "VNC Server"
     icon: mdi:remote-desktop
-    device_class: switch
+    optimistic: true
 
 # ---------------------------------------------------------------------------
 # Sensors — read-only telemetry (uptime only; command/cpu_temperature
