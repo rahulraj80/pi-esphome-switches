@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.env
+.venv/
+
+# ESPHome
+.esphome/
+*.secret.yaml
+.credentials
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

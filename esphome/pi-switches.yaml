@@ -1,0 +1,173 @@
+esphome:
+  name: pi-switches
+  friendly_name: "Pi Control Switches"
+  project:
+    name: "rahulraj80.pi-esphome-switches"
+    version: "1.0.0"
+
+linux:
+
+# ---------------------------------------------------------------------------
+# Native API — this is how Home Assistant discovers & talks to this device.
+# In Home Assistant: Settings → Devices & Services → Add Integration → ESPHome
+# then enter this Pi's IP address (or let mDNS discover it).
+# ---------------------------------------------------------------------------
+native_api:
+  port: 6053
+  reboot_timeout: 0s
+
+# OTA updates via the ESPHome dashboard / HA
+ota:
+  - platform: esphome
+    password: "CHANGE_ME_OTA_PASSWORD"
+
+# ---------------------------------------------------------------------------
+# Momentary buttons (press to trigger, auto-reset)
+# ---------------------------------------------------------------------------
+button:
+  - platform: template
+    name: "Reboot Pi"
+    icon: mdi:restart
+    on_press:
+      - script.execute: reboot_action
+
+  - platform: template
+    name: "Shutdown Pi"
+    icon: mdi:power
+    on_press:
+      - script.execute: shutdown_action
+
+  - platform: template
+    name: "Update System"
+    icon: mdi:package-up
+    on_press:
+      - script.execute: update_action
+
+# ---------------------------------------------------------------------------
+# Toggle switches (persistent on/off)
+# ---------------------------------------------------------------------------
+switch:
+  - platform: template
+    name: "VNC Server"
+    icon: mdi:remote-desktop
+    id: vnc_switch
+    turn_on_action:
+      - script.execute: vnc_start
+    turn_off_action:
+      - script.execute: vnc_stop
+    lambda: |-
+      // Reflect the real service state (polled by the status sensor below)
+      return id(vnc_status).state > 0.5;
+
+# ---------------------------------------------------------------------------
+# Sensors — read-only status telemetry
+# ---------------------------------------------------------------------------
+sensor:
+  # VNC service status (1 = running, 0 = stopped) — feeds the toggle above
+  - platform: command
+    name: "VNC Service Status"
+    command: "systemctl is-active --quiet vncserver-x11-serviced && echo 1 || echo 0"
+    update_interval: 15s
+    id: vnc_status
+    unit_of_measurement: ""
+    accuracy_decimals: 0
+    internal: true
+
+  # CPU temperature
+  - platform: cpu_temperature
+    name: "CPU Temperature"
+    sensor:
+      name: "CPU Temperature Sensor"
+    update_interval: 30s
+
+  # Uptime
+  - platform: uptime
+    name: "Pi Uptime"
+    id: uptime_sensor
+    update_interval: 60s
+
+  # Optional: CPU load average (uncomment to use)
+  # - platform: cpu_load
+  #   name: "CPU Load"
+  #   update_interval: 30s
+
+# ---------------------------------------------------------------------------
+# Optional extras — uncomment any you want to enable
+# ---------------------------------------------------------------------------
+
+# WiFi toggle (requires NetworkManager / nmcli)
+# switch:
+#   - platform: template
+#     name: "WiFi"
+#     icon: mdi:wifi
+#     turn_on_action:
+#       - shell_command.execute: "sudo nmcli radio wifi on"
+#     turn_off_action:
+#       - shell_command.execute: "sudo nmcli radio wifi off"
+#     lambda: |-
+#       return id(wifi_status).state > 0.5;
+# sensor:
+#   - platform: command
+#     name: "WiFi Status"
+#     command: "nmcli radio wifi | grep -q enabled && echo 1 || echo 0"
+#     update_interval: 15s
+#     id: wifi_status
+#     internal: true
+#     accuracy_decimals: 0
+
+# Bluetooth toggle
+# switch:
+#   - platform: template
+#     name: "Bluetooth"
+#     icon: mdi:bluetooth
+#     turn_on_action:
+#       - shell_command.execute: "sudo rfkill unblock bluetooth"
+#     turn_off_action:
+#       - shell_command.execute: "sudo rfkill block bluetooth"
+#     lambda: |-
+#       return id(bt_status).state > 0.5;
+# sensor:
+#   - platform: command
+#     name: "Bluetooth Status"
+#     command: "rfkill list bluetooth | grep -q 'Soft blocked: no' && echo 1 || echo 0"
+#     update_interval: 15s
+#     id: bt_status
+#     internal: true
+#     accuracy_decimals: 0
+
+# ---------------------------------------------------------------------------
+# Scripts — wrap shell commands so buttons/switches can call them
+# ---------------------------------------------------------------------------
+script:
+  - id: reboot_action
+    mode: queued
+    then:
+      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh reboot"
+
+  - id: shutdown_action
+    mode: queued
+    then:
+      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh shutdown"
+
+  - id: update_action
+    mode: queued
+    then:
+      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh update"
+
+  - id: vnc_start
+    mode: queued
+    then:
+      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh vnc-start"
+
+  - id: vnc_stop
+    mode: queued
+    then:
+      - shell_command.execute: "sudo /opt/pi-esphome-switches/scripts/pi-actions.sh vnc-stop"
+
+# ---------------------------------------------------------------------------
+# Status LED (onboard) — optional, shows ESPHome is running
+# ---------------------------------------------------------------------------
+# status_led:
+#   pin:
+#     number: GPIO16  # change to your board's LED pin
+#     inverted: true

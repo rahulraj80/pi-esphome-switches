@@ -1,0 +1,20 @@
+[Unit]
+Description=Pi ESPHome Switches (esphome linux platform)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/pi-esphome-switches
+# Run esphome in the foreground; systemd will restart it on failure
+ExecStartPre=/usr/bin/esphome config /opt/pi-esphome-switches/esphome/pi-switches.yaml >/dev/null 2>&1 || true
+ExecStart=/usr/bin/esphome run /opt/pi-esphome-switches/esphome/pi-switches.yaml --no-logs
+Restart=always
+RestartSec=5
+# Give actions (reboot/shutdown) time to finish before systemd kills the process
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

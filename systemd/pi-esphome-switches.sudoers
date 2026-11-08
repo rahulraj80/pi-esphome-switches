@@ -1,0 +1,18 @@
+# /etc/sudoers.d/pi-esphome-switches
+#
+# Allow the pi user to run the pi-actions dispatcher (and the actions it
+# calls) without a password. Installed with:
+#   sudo install -m 0440 systemd/pi-esphome-switches.sudoers /etc/sudoers.d/pi-esphome-switches
+#   visudo -c  # validate
+#
+pi ALL=(ALL) NOPASSWD: /opt/pi-esphome-switches/scripts/pi-actions.sh
+pi ALL=(ALL) NOPASSWD: /usr/sbin/reboot
+pi ALL=(ALL) NOPASSWD: /usr/sbin/poweroff
+pi ALL=(ALL) NOPASSWD: /usr/bin/apt-get update -y
+pi ALL=(ALL) NOPASSWD: /usr/bin/apt-get upgrade -y
+pi ALL=(ALL) NOPASSWD: /usr/bin/systemctl start vncserver-x11-serviced
+pi ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop vncserver-x11-serviced
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli radio wifi on
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli radio wifi off
+pi ALL=(ALL) NOPASSWD: /usr/bin/rfkill unblock bluetooth
+pi ALL=(ALL) NOPASSWD: /usr/bin/rfkill block bluetooth
