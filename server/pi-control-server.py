@@ -95,6 +95,59 @@ def _constant_time_compare(a, b):
     return result == 0
 
 
+UI_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Control</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin: 1rem 0; }
+  button { padding: .9rem 1rem; font-size: 1rem; border-radius: .6rem; border: 1px solid #8888; background: #8881; cursor: pointer; }
+  button:hover { background: #8883; }
+  button.danger { border-color: #d33; color: #d33; }
+  #log { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: .85rem; background: #8881; padding: .75rem; border-radius: .5rem; min-height: 3rem; }
+</style>
+</head>
+<body>
+<h1>Raspberry Pi Control</h1>
+<p>Direct action access (works even if Home Assistant / ESPHome is offline).</p>
+<div class="grid">
+  <button data-post="/action/reboot" class="danger">Reboot Pi</button>
+  <button data-post="/action/shutdown" class="danger">Shutdown Pi</button>
+  <button data-post="/action/update">Update System</button>
+  <button data-post="/action/vnc/start">Start VNC</button>
+  <button data-post="/action/vnc/stop">Stop VNC</button>
+  <button data-get="/action/vnc/status">VNC Status</button>
+</div>
+<div id="log">Ready.</div>
+<script>
+const log = (m) => { document.getElementById('log').textContent = m; };
+document.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', async () => {
+    const post = b.dataset.post, get = b.dataset.get;
+    const url = post || get;
+    const opts = { method: post ? 'POST' : 'GET' };
+    if (post && !confirm('Run: ' + post + ' ?')) return;
+    log('... ' + url);
+    try {
+      const r = await fetch(url, opts);
+      const t = await r.text();
+      log(r.status + ' ' + r.statusText + '\\n' + t);
+    } catch (e) {
+      log('ERROR: ' + e);
+    }
+  });
+});
+</script>
+</body>
+</html>
+"""
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -110,9 +163,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _send_html(self, code, html):
+        payload = html.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def do_GET(self):  # noqa: N802
         if self.path == "/health":
             self._send(200, {"status": "ok"})
+            return
+
+        if self.path in ("/", "/ui"):
+            if not _check_auth(self):
+                return
+            self._send_html(200, UI_HTML)
             return
 
         if self.path == "/action/vnc/status":
