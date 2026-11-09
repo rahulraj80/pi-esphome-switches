@@ -128,3 +128,33 @@ curl -u piadmin:changeme -X POST http://<pi-ip>:9090/action/vnc/status
 ## License
 
 MIT
+
+## Direct access (no Home Assistant / ESPHome needed)
+
+The control server runs independently on the Pi at `http://192.168.3.94:9090`
+(HTTP Basic Auth, default `piadmin` / `changeme`).
+
+- **Browser UI:** open `http://192.168.3.94:9090/ui` — one-press buttons for
+  Reboot / Shutdown / Update / VNC start / VNC stop, plus a VNC status check.
+- **Health (no auth):** `curl http://192.168.3.94:9090/health`
+- **Actions via curl:**
+  ```bash
+  curl -u piadmin:changeme -X POST http://192.168.3.94:9090/action/reboot
+  curl -u piadmin:changeme -X POST http://192.168.3.94:9090/action/shutdown
+  curl -u piadmin:changeme -X POST http://192.168.3.94:9090/action/update
+  curl -u piadmin:changeme -X POST http://192.168.3.94:9090/action/vnc/start
+  curl -u piadmin:changeme -X POST http://192.168.3.94:9090/action/vnc/stop
+  curl -u piadmin:changeme                 http://192.168.3.94:9090/action/vnc/status
+  ```
+
+## Design notes
+
+- **Reboot / Shutdown / Update** are ESPHome `button` entities (one-press), each
+  `on_press` doing an `http_request.post` to the control server — never toggles
+  (you can't un-reboot).
+- **VNC** is an ESPHome `switch` (genuine on/off state) that POSTs start/stop.
+- The ESPHome device performs the HTTP calls itself, so no HA automations or
+  `rest_command` are required.
+- **Version pin:** esphome on the Pi must match Home Assistant's bundled
+  `aioesphomeapi`. With HA 2025.11.3 use **esphome 2025.11.x** (newer esphome
+  sends `object_id` in a format HA can't read, causing empty-id collisions).
